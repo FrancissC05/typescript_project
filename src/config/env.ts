@@ -3,7 +3,8 @@ import "dotenv/config";
 export const env = {
     PORT: Number(process.env.PORT ?? 3000),
     WEBHOOK_VERIFY_TOKEN: process.env.WEBHOOK_VERIFY_TOKEN ?? "",
-    GRAPH_API_TOKEN: process.env.GRAPH_API_TOKEN ?? ""
+    GRAPH_API_TOKEN: process.env.GRAPH_API_TOKEN ?? "",
+    AUDIO_FILE_PATH: process.env.AUDIO_FILE_PATH ?? ""
 };
 
 if (!env.WEBHOOK_VERIFY_TOKEN) {
@@ -12,3 +13,8 @@ if (!env.WEBHOOK_VERIFY_TOKEN) {
 if (!env.GRAPH_API_TOKEN) {
     console.warn("Aviso: falta GRAPH_API_TOKEN en .env (solo necesario si vas a responder con Graph API)");
 }
+
+if (!env.AUDIO_FILE_PATH) {
+    console.warn("Aviso: falta AUDIO_FILE_PATH en .env (necesaria para subir audio y enviar por media_id)");
+}
+
