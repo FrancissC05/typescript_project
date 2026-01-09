@@ -11,37 +11,68 @@ export function verifyWebhook(req: Request, res: Response) {
     const challenge = req.query["hub.challenge"];
 
     if (mode === "subscribe" && token === env.WEBHOOK_VERIFY_TOKEN) {
-        console.log("Webhook verified successfully!");
         return res.status(200).send(challenge);
     }
     return res.sendStatus(403);
 }
 
 export async function receiveWebhook(req: Request, res: Response) {
-    // Regla práctica: responder rápido a Meta
+    // WhatsApp/Meta espera respuesta rápida para no reintentar/timeout
     res.sendStatus(200);
 
     try {
         const parsed = parseIncomingTextEvent(req.body);
 
         if (!parsed.ok) {
-            console.log("Webhook ignorado:", parsed.reason);
+            if (!parsed.reason.startsWith("No hay messages[0]")) {
+                console.log("Webhook ignorado:", parsed.reason);
+            }
             return;
         }
 
-        const event = parsed.value;
+        const msgEvent = parsed.value;
+        const bodyLower = msgEvent.body.toLowerCase();
 
-        // Aquí va tu “regla” (sin ifs anidados)
-        const bodyLower = event.body.toLowerCase();
-        if (!bodyLower.includes("send money")) return;
+        if (bodyLower.includes("send music")) {
+            if (!env.AUDIO_FILE_PATH) {
+                console.log("AUDIO_FILE_PATH no configurada.");
+                return;
+            }
 
-        await whatsappApi.sendTextReply({
-            phoneNumberId: event.phoneNumberId,
-            to: event.from,
-            replyToMessageId: event.messageId,
-            text: `Echo: ${event.body}`
-        });
+            const mediaId = await whatsappApi.uploadAudioFromFile({
+                phoneNumberId: msgEvent.phoneNumberId,
+                filePath: env.AUDIO_FILE_PATH,
+                mimeType: "audio/mpeg"
+            });
+
+            await whatsappApi.sendAudioById({
+                phoneNumberId: msgEvent.phoneNumberId,
+                to: msgEvent.from,
+                replyToMessageId: msgEvent.messageId,
+                mediaId
+            });
+            return;
+
+        } else if (bodyLower.includes("send money")) {
+            await whatsappApi.sendTextReply({
+                phoneNumberId: msgEvent.phoneNumberId,
+                to: msgEvent.from,
+                replyToMessageId: msgEvent.messageId,
+                text: `Echo: ${msgEvent.body}`
+            });
+            return;
+
+        } else {
+            // opcional: respuesta por defecto
+            await whatsappApi.sendTextReply({
+                phoneNumberId: msgEvent.phoneNumberId,
+                to: msgEvent.from,
+                replyToMessageId: msgEvent.messageId,
+                text: `Comando no reconocido. Prueba "send music" o "send money".`
+            });
+            return;
+        }
     } catch (err) {
-        console.error("Error procesando webhook:", err);
+        console.error("Error en receiveWebhook:", err);
     }
 }
