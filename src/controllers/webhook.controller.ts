@@ -17,7 +17,7 @@ export function verifyWebhook(req: Request, res: Response) {
 }
 
 export async function receiveWebhook(req: Request, res: Response) {
-    // WhatsApp/Meta espera respuesta rápida para no reintentar/timeout
+    // Meta espera respuesta rápida
     res.sendStatus(200);
 
     try {
@@ -31,47 +31,109 @@ export async function receiveWebhook(req: Request, res: Response) {
         }
 
         const msgEvent = parsed.value;
-        const bodyLower = msgEvent.body.toLowerCase();
 
-        if (bodyLower.includes("send music")) {
-            if (!env.AUDIO_FILE_PATH) {
-                console.log("AUDIO_FILE_PATH no configurada.");
+        // 1) EVENTO TEXTO
+        if (msgEvent.kind === "text") {
+            const bodyLower = msgEvent.body.toLowerCase();
+
+            // Trigger para mostrar menú
+            if (bodyLower.includes("menu") || bodyLower.includes("start")) {
+                await whatsappApi.sendMenuButtons({
+                    phoneNumberId: msgEvent.phoneNumberId,
+                    to: msgEvent.from,
+                    replyToMessageId: msgEvent.messageId
+                });
                 return;
             }
 
-            const mediaId = await whatsappApi.uploadAudioFromFile({
-                phoneNumberId: msgEvent.phoneNumberId,
-                filePath: env.AUDIO_FILE_PATH,
-                mimeType: "audio/mpeg"
-            });
+            // Comandos por texto (tu lógica actual)
+            if (bodyLower.includes("send music")) {
+                if (!env.AUDIO_FILE_PATH) {
+                    console.log("AUDIO_FILE_PATH no configurada.");
+                    return;
+                }
 
-            await whatsappApi.sendAudioById({
-                phoneNumberId: msgEvent.phoneNumberId,
-                to: msgEvent.from,
-                replyToMessageId: msgEvent.messageId,
-                mediaId
-            });
-            return;
+                const mediaId = await whatsappApi.uploadAudioFromFile({
+                    phoneNumberId: msgEvent.phoneNumberId,
+                    filePath: env.AUDIO_FILE_PATH,
+                    mimeType: "audio/mpeg"
+                });
 
-        } else if (bodyLower.includes("send money")) {
+                await whatsappApi.sendAudioById({
+                    phoneNumberId: msgEvent.phoneNumberId,
+                    to: msgEvent.from,
+                    replyToMessageId: msgEvent.messageId,
+                    mediaId
+                });
+                return;
+            }
+
+            if (bodyLower.includes("send money")) {
+                await whatsappApi.sendTextReply({
+                    phoneNumberId: msgEvent.phoneNumberId,
+                    to: msgEvent.from,
+                    replyToMessageId: msgEvent.messageId,
+                    text: `Echo: ${msgEvent.body}`
+                });
+                return;
+            }
+
+            // Fallback para texto
             await whatsappApi.sendTextReply({
                 phoneNumberId: msgEvent.phoneNumberId,
                 to: msgEvent.from,
                 replyToMessageId: msgEvent.messageId,
-                text: `Echo: ${msgEvent.body}`
-            });
-            return;
-
-        } else {
-            // opcional: respuesta por defecto
-            await whatsappApi.sendTextReply({
-                phoneNumberId: msgEvent.phoneNumberId,
-                to: msgEvent.from,
-                replyToMessageId: msgEvent.messageId,
-                text: `Comando no reconocido. Prueba "send music" o "send money".`
+                text: `Escribe "menu" para ver opciones, o usa "send music" / "send money".`
             });
             return;
         }
+
+        // 2) EVENTO BOTÓN
+        if (msgEvent.kind === "button") {
+            // Mapear IDs de botones a acciones
+            if (msgEvent.buttonId === "SEND_MUSIC") {
+                if (!env.AUDIO_FILE_PATH) {
+                    console.log("AUDIO_FILE_PATH no configurada.");
+                    return;
+                }
+
+                const mediaId = await whatsappApi.uploadAudioFromFile({
+                    phoneNumberId: msgEvent.phoneNumberId,
+                    filePath: env.AUDIO_FILE_PATH,
+                    mimeType: "audio/mpeg"
+                });
+
+                await whatsappApi.sendAudioById({
+                    phoneNumberId: msgEvent.phoneNumberId,
+                    to: msgEvent.from,
+                    replyToMessageId: msgEvent.messageId,
+                    mediaId
+                });
+                return;
+            }
+
+            if (msgEvent.buttonId === "SEND_MONEY") {
+                await whatsappApi.sendTextReply({
+                    phoneNumberId: msgEvent.phoneNumberId,
+                    to: msgEvent.from,
+                    replyToMessageId: msgEvent.messageId,
+                    text: "Opción SEND_MONEY seleccionada. (Aquí va tu lógica real)."
+                });
+                return;
+            }
+
+            // Botón desconocido
+            await whatsappApi.sendTextReply({
+                phoneNumberId: msgEvent.phoneNumberId,
+                to: msgEvent.from,
+                replyToMessageId: msgEvent.messageId,
+                text: `Botón no reconocido: ${msgEvent.buttonId}`
+            });
+            return;
+        }
+
+        // Si llega un kind no soportado (por si amplías en el futuro)
+        console.log("Evento no soportado:", msgEvent);
     } catch (err) {
         console.error("Error en receiveWebhook:", err);
     }

@@ -90,4 +90,34 @@ export class WhatsAppApiService {
             }
         });
     }
+
+    async sendMenuButtons(params: {
+        phoneNumberId: string;
+        to: string;
+        replyToMessageId: string;
+    }): Promise<void> {
+        const { phoneNumberId, to, replyToMessageId } = params;
+
+        await axios({
+            method: "POST",
+            url: `https://graph.facebook.com/${this.apiVersion}/${phoneNumberId}/messages`,
+            headers: { Authorization: `Bearer ${this.graphApiToken}` },
+            data: {
+                messaging_product: "whatsapp",
+                to,
+                type: "interactive",
+                interactive: {
+                    type: "button",
+                    body: { text: "Elige una opción:" },
+                    action: {
+                        buttons: [
+                            { type: "reply", reply: { id: "SEND_MUSIC", title: "Enviar música" } },
+                            { type: "reply", reply: { id: "SEND_MONEY", title: "Enviar dinero" } }
+                        ]
+                    }
+                },
+                context: { message_id: replyToMessageId }
+            }
+        });
+    }
 }

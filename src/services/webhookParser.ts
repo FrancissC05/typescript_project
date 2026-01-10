@@ -20,21 +20,43 @@ export function parseIncomingTextEvent(body: MetaWebhookBody): Result<IncomingTe
         return { ok: false, reason: "No hay messages[0] (posible evento distinto a mensajes)", details: value };
     }
 
-    if (message0.type !== "text") {
-        return { ok: false, reason: `Mensaje no es texto (type=${message0.type})`, details: message0 };
+    const common = {
+        messageId: (message0 as any).id as string,
+        from: (message0 as any).from as string,
+        phoneNumberId
+    };
+
+    // 1) TEXTO
+    if (message0.type === "text") {
+        const textBody = (message0 as any).text?.body;
+        if (!textBody) return { ok: false, reason: "Falta text.body en el mensaje", details: message0 };
+
+        return {
+            ok: true,
+            value: {
+                kind: "text",
+                ...common,
+                body: textBody
+            }
+        };
     }
 
-    const textBody = (message0 as any).text?.body;
-    if (!textBody) return { ok: false, reason: "Falta text.body en el mensaje", details: message0 };
-
-    return {
-        ok: true,
-        value: {
-            kind: "text",
-            messageId: (message0 as any).id,
-            from: (message0 as any).from,
-            body: textBody,
-            phoneNumberId
+    // 2) BOTÓN (interactive reply button)
+    if (message0.type === "interactive") {
+        const buttonId = (message0 as any).interactive?.button_reply?.id;
+        if (!buttonId) {
+            return { ok: false, reason: "Mensaje interactive sin button_reply.id", details: message0 };
         }
-    };
+
+        return {
+            ok: true,
+            value: {
+                kind: "button",
+                ...common,
+                buttonId
+            }
+        };
+    }
+
+    return { ok: false, reason: `Tipo de mensaje no soportado (type=${message0.type})`, details: message0 };
 }
